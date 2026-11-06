@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arcade Nova</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#05030f;--ink:#eaf4ff;--muted:rgba(190,210,245,.7);--font:Orbitron,"Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:var(--font);overflow-x:hidden}
+  #bg{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+  main{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:56px 16px 48px}
+  header{text-align:center;margin-bottom:44px}
+  h1{margin:0;font-size:clamp(38px,8vw,84px);font-weight:900;letter-spacing:.04em;line-height:1}
+  h1 span{display:inline-block;background:linear-gradient(180deg,#fff 0%,#7fe3ff 50%,#ff4dd2 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 18px rgba(47,214,255,.55));animation:drop .8s cubic-bezier(.2,1.6,.4,1) both, bob 3s ease-in-out infinite}
+  @keyframes drop{from{transform:translateY(-80px) scale(.6);opacity:0}to{transform:none;opacity:1}}
+  @keyframes bob{0%,100%{translate:0 0}50%{translate:0 -6px}}
+  .sub{margin-top:16px;color:var(--muted);font-size:clamp(12px,2.2vw,15px);letter-spacing:.35em;animation:fade 1s .8s both}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:22px;perspective:1000px}
+  .card{--c:#2fd6ff;position:relative;display:flex;flex-direction:column;text-decoration:none;color:inherit;border-radius:20px;overflow:hidden;
+    background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.12);
+    backdrop-filter:blur(8px);transform-style:preserve-3d;transition:transform .25s ease, box-shadow .25s ease, border-color .25s;
+    animation:rise .7s cubic-bezier(.2,1.3,.4,1) backwards;animation-delay:calc(.9s + var(--i)*.12s)}
+  @keyframes rise{from{opacity:0;transform:translateY(60px) rotateX(25deg)}to{opacity:1;transform:none}}
+  .card:hover,.card:focus-visible{border-color:var(--c);box-shadow:0 0 0 1px var(--c),0 18px 50px -10px var(--c);outline:none}
+  .card::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at var(--mx,50%) var(--my,0%),rgba(255,255,255,.18),transparent 45%);opacity:0;transition:opacity .25s;pointer-events:none}
+  .card:hover::after{opacity:1}
+  .card canvas{width:100%;aspect-ratio:16/10;display:block;background:#07041a}
+  .info{padding:16px 18px 18px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .tag{align-self:flex-start;font-size:10px;font-weight:700;letter-spacing:.15em;color:var(--c);border:1px solid var(--c);padding:3px 9px;border-radius:999px}
+  .card h2{margin:2px 0 0;font-size:21px;font-weight:900;letter-spacing:.03em}
+  .card p{margin:0;color:var(--muted);font-size:13px;line-height:1.6;font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+  .foot{margin-top:auto;padding-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:12px}
+  .hi{color:#ffd84a;font-weight:700}
+  .play{font-weight:900;color:var(--c);letter-spacing:.1em;transition:letter-spacing .25s}
+  .card:hover .play{letter-spacing:.25em}
+  footer{text-align:center;margin-top:40px;color:rgba(190,210,245,.45);font-size:12px;font-family:"Malgun Gothic",sans-serif}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<main>
+  <header>
+    <h1 id="logo"></h1>
+    <div class="sub">4 GAMES · ONE ARCADE</div>
+  </header>
+  <section class="grid" id="grid"></section>
+  <footer>카드를 눌러 게임을 시작하세요 · 각 게임에서 "← 메뉴"를 누르면 이곳으로 돌아옵니다</footer>
+</main>
+<script>
+'use strict';
+const TAU = Math.PI * 2, rnd = (a, b) => a + Math.random() * (b - a);
+const GAMES = [
+  { file: 'nova-strike.html', name: 'NOVA STRIKE', tag: 'SHOOTER', c: '#2fd6ff', key: 'novaStrikeHi', desc: '전투기를 몰고 적 편대와 거대 보스를 격파하는 종스크롤 슈팅.' },
+  { file: 'neon-breaker.html', name: 'NEON BREAKER', tag: 'BRICK BREAKER', c: '#ff4dd2', key: 'neonBreakerHi', desc: '네온 공으로 벽돌을 산산조각! 멀티볼·레이저·파이어볼 아이템.' },
+  { file: 'sky-runner.html', name: 'SKY RUNNER', tag: 'ENDLESS RUNNER', c: '#ffb02e', key: 'skyRunnerHi', desc: '밤의 도시 옥상을 질주하며 점프·슬라이드로 장애물을 피하라.' },
+  { file: 'crystal-drop.html', name: 'CRYSTAL DROP', tag: 'BLOCK PUZZLE', c: '#5dff8a', key: 'crystalDropHi', desc: '떨어지는 크리스탈 블록을 맞춰 줄을 지우는 퍼즐. 4줄 동시 삭제를 노려라.' },
+];
+
+// 로고 글자별 애니메이션
+const logo = document.getElementById('logo');
+'ARCADE NOVA'.split('').forEach((ch, i) => {
+  const s = document.createElement('span'); s.textContent = ch === ' ' ? ' ' : ch;
+  s.style.animationDelay = `${i * .06}s, ${.9 + i * .08}s`; logo.appendChild(s);
+});
+
+// 카드 생성
+const grid = document.getElementById('grid'), previews = [];
+GAMES.forEach((g, i) => {
+  let hi = 0; try { hi = +localStorage.getItem(g.key) || 0; } catch (_) {}
+  const a = document.createElement('a');
+  a.className = 'card'; a.href = g.file; a.style.setProperty('--c', g.c); a.style.setProperty('--i', i);
+  a.innerHTML = `<canvas></canvas><div class="info"><span class="tag">${g.tag}</span><h2>${g.name}</h2><p>${g.desc}</p>
+    <div class="foot"><span class="hi">${hi > 0 ? 'HI ' + hi.toLocaleString() : 'NEW'}</span><span class="play">PLAY ▶</span></div></div>`;
+  a.addEventListener('pointermove', e => {
+    const r = a.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    a.style.transform = `rotateY(${(x - .5) * 14}deg) rotateX(${(.5 - y) * 12}deg) translateZ(10px)`;
+    a.style.setProperty('--mx', x * 100 + '%'); a.style.setProperty('--my', y * 100 + '%');
+  });
+  a.addEventListener('pointerleave', () => { a.style.transform = ''; });
+  grid.appendChild(a);
+  previews.push({ cv: a.querySelector('canvas'), g, i, st: {} });
+});
+
+// 배경 별
+const bg = document.getElementById('bg'), bx = bg.getContext('2d');
+let W, H, stars = [];
+function resize() {
+  const d = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight;
+  bg.width = W * d; bg.height = H * d; bx.setTransform(d, 0, 0, d, 0, 0);
+  stars = Array.from({ length: Math.floor(W * H / 5000) }, () => ({ x: rnd(0, W), y: rnd(0, H), z: rnd(.2, 1) }));
+  for (const p of previews) { const w = p.cv.clientWidth, h = p.cv.clientHeight; p.cv.width = w * d; p.cv.height = h * d; p.w = w; p.h = h; p.d = d; }
+}
+addEventListener('resize', resize);
+
+const glowCache = {};
+function glow(ctx, x, y, r, c, a = 1) {
+  if (!glowCache[c]) {
+    const s = document.createElement('canvas'); s.width = s.height = 64; const g = s.getContext('2d');
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, '#fff'); gr.addColorStop(.22, c); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); glowCache[c] = s;
+  }
+  ctx.globalAlpha = a; ctx.drawImage(glowCache[c], x - r, y - r, r * 2, r * 2); ctx.globalAlpha = 1;
+}
+
+// 미리보기 애니메이션 (각 게임의 분위기를 짧게 표현)
+const DRAW = [
+  (c, w, h, t) => { // 슈팅
+    for (let i = 0; i < 40; i++) { const y = (i * 53 + t * 160) % h; c.fillStyle = 'rgba(200,220,255,.6)'; c.fillRect((i * 97) % w, y, 1.5, 4); }
+    const px = w / 2 + Math.sin(t * 1.4) * w * .25, py = h * .75;
+    c.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 6; i++) { const y = py - 20 - ((t * 400 + i * 40) % (h * .7)); glow(c, px - 5, y, 7, '#2fd6ff', .9); glow(c, px + 5, y, 7, '#2fd6ff', .9); }
+    for (let i = 0; i < 4; i++) { const ex = w * (.2 + i * .2), ey = h * .25 + Math.sin(t * 2 + i) * 10; glow(c, ex, ey, 18, '#ff3d9a', .8); }
+    const bt = (t * .7) % 1; glow(c, w * .4, h * .25, 10 + bt * 50, '#ffcf4a', 1 - bt);
+    glow(c, px, py + 16, 14, '#3fb8ff', .9);
+    c.globalCompositeOperation = 'source-over';
+    c.fillStyle = '#eaf6ff'; c.beginPath(); c.moveTo(px, py - 16); c.lineTo(px + 16, py + 10); c.lineTo(px, py + 5); c.lineTo(px - 16, py + 10); c.closePath(); c.fill();
+  },
+  (c, w, h, t) => { // 벽돌깨기
+    const cols = ['#ff4dd2', '#b46bff', '#2fd6ff', '#5dff8a', '#ffcf4a'], bw = w / 8;
+    const bx2 = w / 2 + Math.sin(t * 2.3) * w * .38, by = h * .55 + Math.sin(t * 3.7) * h * .3;
+    for (let r = 0; r < 4; r++) for (let k = 0; k < 8; k++) {
+      const x = k * bw + 3, y = 14 + r * 16, hitd = Math.hypot(bx2 - (x + bw / 2), by - (y + 7)) < 40;
+      c.fillStyle = cols[(r + k) % 5]; c.globalAlpha = hitd ? .25 : .9; c.fillRect(x, y, bw - 6, 11);
+    }
+    c.globalAlpha = 1; c.globalCompositeOperation = 'lighter';
+    for (let i = 1; i < 8; i++) glow(c, w / 2 + Math.sin((t - i * .03) * 2.3) * w * .38, h * .55 + Math.sin((t - i * .03) * 3.7) * h * .3, 9 - i, '#ff4dd2', .5);
+    glow(c, bx2, by, 14, '#ffffff', 1);
+    const pd = w / 2 + Math.sin(t * 2.3) * w * .3;
+    glow(c, pd, h - 16, 40, '#ff4dd2', .35); c.globalCompositeOperation = 'source-over';
+    c.fillStyle = '#ffe0f6'; c.fillRect(pd - 34, h - 20, 68, 7);
+  },
+  (c, w, h, t) => { // 러너
+    c.fillStyle = 'rgba(255,176,46,.15)'; c.beginPath(); c.arc(w * .78, h * .28, 26, 0, TAU); c.fill();
+    for (let i = 0; i < 9; i++) { const bw2 = 40, x = ((i * bw2 * 1.3 - t * 40) % (w + 60) + w + 60) % (w + 60) - 50, bh = 40 + (i * 37) % 50; c.fillStyle = '#1a1038'; c.fillRect(x, h * .78 - bh, bw2, bh); }
+    for (let i = 0; i < 6; i++) { const x = ((i * 120 - t * 200) % (w + 120) + w + 120) % (w + 120) - 100; c.fillStyle = '#2a1650'; c.fillRect(x, h * .78, 90, h); c.fillStyle = '#ffb02e'; c.fillRect(x, h * .78, 90, 2); }
+    const jp = Math.max(0, Math.sin(t * 3.2)) * 42, x = w * .28, y = h * .78 - 20 - jp;
+    c.globalCompositeOperation = 'lighter'; glow(c, x, y, 26, '#ffb02e', .6);
+    for (let i = 0; i < 5; i++) glow(c, ((i * 70 - t * 260) % w + w) % w, h * .5, 6, '#ffd84a', .9);
+    c.globalCompositeOperation = 'source-over';
+    c.fillStyle = '#fff3d8'; c.fillRect(x - 7, y - 10, 14, 18); c.beginPath(); c.arc(x, y - 16, 7, 0, TAU); c.fill();
+    c.strokeStyle = '#fff3d8'; c.lineWidth = 3; const lg = Math.sin(t * 14) * 7;
+    c.beginPath(); c.moveTo(x, y + 8); c.lineTo(x + lg, y + 20); c.moveTo(x, y + 8); c.lineTo(x - lg, y + 20); c.stroke();
+  },
+  (c, w, h, t) => { // 퍼즐
+    const cs = Math.min(w / 16, h / 9), ox = w / 2 - cs * 5, oy = h - cs * 7 - 6;
+    const cols = ['#5dff8a', '#2fd6ff', '#ff4dd2', '#ffcf4a', '#b46bff'];
+    const clr = (t % 3) > 2.6;
+    for (let r = 0; r < 4; r++) for (let k = 0; k < 10; k++) {
+      if (r < 3 && (k * 7 + r * 3) % 5 === 0 && !(r === 3)) continue;
+      const full = r === 3; c.fillStyle = full && clr ? '#ffffff' : cols[(k + r) % 5];
+      c.globalAlpha = .9; c.fillRect(ox + k * cs + 1, oy + (3 + r) * cs + 1, cs - 2, cs - 2);
+    }
+    const fy = oy + ((t % 3) / 3) * cs * 3;
+    c.globalAlpha = 1; c.fillStyle = '#5dff8a';
+    [[0, 0], [1, 0], [2, 0], [1, 1]].forEach(([a, b]) => c.fillRect(ox + (4 + a) * cs + 1, fy - cs * 2 + b * cs + 1, cs - 2, cs - 2));
+    c.globalCompositeOperation = 'lighter'; glow(c, ox + 5 * cs, fy - cs, cs * 3, '#5dff8a', .35);
+    if (clr) glow(c, w / 2, oy + 6.5 * cs, w * .5, '#ffffff', .5);
+    c.globalCompositeOperation = 'source-over';
+    c.strokeStyle = 'rgba(93,255,138,.3)'; c.strokeRect(ox, oy - cs * 3, cs * 10, cs * 10);
+  },
+];
+
+let T = 0, last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now; T += dt;
+  bx.fillStyle = '#05030f'; bx.fillRect(0, 0, W, H);
+  const g = bx.createRadialGradient(W * .5, H * .15, 0, W * .5, H * .15, Math.max(W, H) * .8);
+  g.addColorStop(0, 'rgba(80,40,200,.25)'); g.addColorStop(.5, 'rgba(200,40,150,.08)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  bx.fillStyle = g; bx.fillRect(0, 0, W, H);
+  for (const s of stars) {
+    s.y += s.z * s.z * 60 * dt; if (s.y > H) { s.y = 0; s.x = rnd(0, W); }
+    bx.fillStyle = `rgba(200,220,255,${.3 + s.z * .6})`; bx.fillRect(s.x, s.y, s.z * 1.8, s.z * (1.8 + s.z * 4));
+  }
+  for (const p of previews) {
+    if (!p.w) continue;
+    const c = p.cv.getContext('2d'); c.setTransform(p.d, 0, 0, p.d, 0, 0);
+    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+    c.fillStyle = '#07041a'; c.fillRect(0, 0, p.w, p.h);
+    DRAW[p.i](c, p.w, p.h, T + p.i * 1.7);
+  }
+  requestAnimationFrame(frame);
+}
+resize(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
